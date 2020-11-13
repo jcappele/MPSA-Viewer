@@ -28,9 +28,10 @@ import zipfile
 import urllib.request
 import urllib.error
 import shutil
+import codecs
 
 # Variables
-version = "alpha 0.2"
+version = "alpha 0.3"
 config_file_name = "configuration_file"
 parameters_file_name = "parameters"
 structure_file_name = "structure_list"
@@ -111,40 +112,6 @@ def main(begin: bool):
             time.sleep(1)
             print(f"Project {project_name} successfully generated. "
                   f"You may proceed to modify structure, configuration and parameters files")
-
-        # VALIDATE PROJECT
-        elif user_input.split(" ")[0] == "validate":
-            try:
-                project_name: str = user_input.split(" ")[1]
-            except IndexError:
-                project_name = ""
-                print("You must specify the project name.")
-                main(False)
-
-            path_to_said_project = projects_folder + os.sep + project_name
-
-            # Folder organization
-            set_to_compare_to = {'Aligned_Structures', 'Alignement', 'Log_Files', 'MSTA_result',
-                                 f'{config_file_name}.txt', f'{parameters_file_name}.txt',
-                                 f'{structure_file_name}.txt', 'Original_Structures', 'Processed_Structres',
-                                 'PyMOL_Script', 'PyMOL_Session'}
-
-            if set(os.listdir(path_to_said_project)) == set_to_compare_to:
-                print("Project folder seems to be in order.")
-            else:
-                print(
-                    "ERROR. Project folder not configurated correctly. "
-                    "Please save the configuration files if needed and create a brand new project folder")
-
-            # Configuration file presence and variable check
-            try:
-                with open(path_to_said_project + os.sep + f"{config_file_name}.txt") as config_file:
-                    for line in config_file:
-                        if not line:
-                            continue
-                        print(line.strip())
-            except FileNotFoundError:
-                print("ERROR. Configuration file missing. You need to create a new project.")
 
         # EXECUTE ZIP CREATION
         elif user_input.split(" ")[0] == "zip":
@@ -261,7 +228,7 @@ def main(begin: bool):
             pymol_session = config_dict.get("pymol_session")
             pymol_script_folder = config_dict.get("pymol_script_folder")
             aligned_structures_folder = config_dict.get("aligned_structures_folder")
-            pymol_path = config_dict.get("pymol_path")
+            pymol_path = config_dict.get("pymol_path").replace(r"\"", "/")
 
             time_multiplier = parameters_dict.get("time_multiplier")
             coloration_method = parameters_dict.get("coloration_method")
@@ -441,7 +408,6 @@ def main(begin: bool):
                         for i in dict_dist:
                             useless, value = dict_dist[i].split(",")
                             value_list.append(value.strip())
-                        print(value_list)
                         result = rmsd_list(value_list)
                         value_2 = max(dict_dist.values())
                         pos, dismax = value_2.split(",")
@@ -498,10 +464,6 @@ save {pymol_session}{os.sep}{project_name}.pse""", file=f)
             print("Opening PyMOL session")
 
             subprocess.call([pymol_path, pymol_script_folder + os.sep + f"{project_name}.pml"])
-        
-        # ABOUT
-        elif user_input == "about":
-            print("""""")
 
         # HELP COMMAND
         elif user_input == "help exit":
@@ -527,10 +489,6 @@ new_project <name> (<template>)     generate a new project folder
                 your new project will have the
                 same configuration and parameters
                 files. Not mandatory
-
-
-validate <name>                     validate the folder configuration
-                                    <name> = name of your project
                                 
                                 
 zip <name>                          prepare the pdb files for deposition
@@ -550,26 +508,23 @@ fetch_results <name> <url>          download the MSTA results of a project
                                 
 analysis <name>                     execute the alignement analysis
                                     and create a pymol session based
-                                    on your parameters
-                                    
-
-about                               more informations on the sofware                               
+                                    on your parameters                                    
                                     
                                     """)
 
 
 def copy_config_parameters_from_template(project_name, template_name, projects_folder):
-    with open(projects_folder + os.sep + template_name + os.sep + config_file_name + ".txt",
-              "r") as template_config:
-        with open(projects_folder + os.sep + project_name + os.sep + config_file_name + ".txt",
-                  "w") as project_config:
+    with codecs.open(projects_folder + os.sep + template_name + os.sep + config_file_name + ".txt",
+                     "r", encoding='utf-8') as template_config:
+        with codecs.open(projects_folder + os.sep + project_name + os.sep + config_file_name + ".txt",
+                         "w", encoding='utf-8') as project_config:
             for line in template_config:
                 print(line, file=project_config)
 
-    with open(projects_folder + os.sep + template_name + os.sep + parameters_file_name + ".txt",
-              "r") as template_param:
-        with open(projects_folder + os.sep + project_name + os.sep + parameters_file_name + ".txt",
-                  "w") as project_param:
+    with codecs.open(projects_folder + os.sep + template_name + os.sep + parameters_file_name + ".txt",
+                     "r", encoding='utf-8') as template_param:
+        with codecs.open(projects_folder + os.sep + project_name + os.sep + parameters_file_name + ".txt",
+                         "w", encoding='utf-8') as project_param:
             for line in template_param:
                 print(line, file=project_param)
 
@@ -594,7 +549,8 @@ def mse_to_met(location_folder, destination_folder, file, chain):
 
 def load_config_file(project_name, projects_folder, file_name):
     configfile_dict = {}
-    with open(projects_folder + os.sep + project_name + os.sep + f"{file_name}.txt") as config_file:
+    with codecs.open(projects_folder + os.sep + project_name + os.sep + f"{file_name}.txt",
+                     encoding='utf-8') as config_file:
         lines = filter(None, (line.rstrip() for line in config_file))
         for line in lines:
             if not line.startswith("#"):
@@ -613,7 +569,8 @@ def load_config_file(project_name, projects_folder, file_name):
 
 def load_structure_file(project_name, projects_folder):
     structure_list = []
-    with open(projects_folder + os.sep + project_name + os.sep + f"structure_list.txt") as file:
+    with codecs.open(projects_folder + os.sep + project_name + os.sep + f"structure_list.txt",
+                     encoding='utf-8') as file:
         lines = filter(None, (line.rstrip() for line in file))
         for line in lines:
             if not line.startswith("#"):
@@ -648,7 +605,8 @@ def generate_project_configuration(project_name, project_folder, structure_folde
                                    msta_results_folder, zip_folder):
     with open(project_folder + os.sep + f"{config_file_name}.txt", "w") as configuration_file:
         print(f"""# CONFIGURATION FILE
-# PyMOL path ex: C:/User/PyMOL/pymol.exe   # Make sure the separators are compatible with your operating system
+# PyMOL path ex: C:\\Users\\User\\PyMOL\\PyMOLWin.exe 
+# Make sure the separators are compatible with your operating system
 pymol_path = 
 
 
@@ -732,7 +690,7 @@ def program_startup():
                           version {version}
                           
 Copyright (C) 2020 Julien Cappèle, Claude Didierjean, Frédérique Favier
-This program comes with ABSOLUTELY NO WARRANTY; for details type `about'.
+This program comes with ABSOLUTELY NO WARRANTY.
 This is free software, and you are welcome to redistribute it
 under certain conditions.
 
@@ -795,11 +753,9 @@ def download_pdbs(liste, destination_folder):
         print(destination_folder + os.sep + f"{i}.pdb")
         print(os.path.isfile(destination_folder + os.sep + f"{i}.pdb"))
         if os.path.isfile(destination_folder + os.sep + f"{i}.pdb"):
-            print("structure in")
             print(f"File {i}.pdb already exists.")
             structure_dl.append(i)
         else:
-            print("structure not in")
             if is_pdb_valid(i):
                 print(f"The pdb code {i} seems to be valid.")
                 url = f"https://files.rcsb.org/download/{i}.pdb"

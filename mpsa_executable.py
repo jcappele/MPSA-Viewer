@@ -17,7 +17,14 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+#
+#    Note from the developper:
+#    This program has been written in Python from a self-taught beginner student. Thanks Youtube and Stackoverflow !
+#    This is not made (yet) to be efficient, and will probably be quite bad to read, so I tried to comment the code and
+#    avoid any french, because that what french people tend to do, put french everywhere !
+#
+#    Any thoughts or comments are greatly appreciated !
+#
 
 import math
 import os
@@ -31,7 +38,7 @@ import shutil
 import codecs
 
 # Variables
-version = "alpha 0.3"
+version = "alpha 0.41"
 config_file_name = "configuration_file"
 parameters_file_name = "parameters"
 structure_file_name = "structure_list"
@@ -39,21 +46,27 @@ structure_file_name = "structure_list"
 
 # Main function
 def main(begin: bool):
+    """main function, will be used to check user input and execute commands.
+    if the argument is False, just like stated below, the program startup
+    message will not be printed in the terminal"""
+
     if begin:
         program_startup()
 
+    # Project folder check and creation for the script
     projects_folder = create_folder(os.getcwd(), "MPSA_Projects", False)
 
     user_input = ""
     while user_input != "exit":
         user_input = input("> ")
 
+        # ALL COMMANDS
         # HELP
         if user_input == "help":
             get_help()
             main(False)
 
-        # EXIT... again
+        # EXIT... again!
         elif user_input == "exit":
             exit(0)
 
@@ -62,6 +75,8 @@ def main(begin: bool):
 
             template_present = False
             template_name = ""
+
+            # NAME VARIABLE CHECK
             try:
                 project_name: str = user_input.split(" ")[1]
             except IndexError:
@@ -69,6 +84,7 @@ def main(begin: bool):
                 print("You must specify a name to your new project.")
                 main(False)
 
+            # OPTIONAL TEMPLATE VARIABLE CHECK
             try:
                 template_name: str = user_input.split(" ")[2]
                 template_present = True
@@ -79,6 +95,7 @@ def main(begin: bool):
                 print("This project already exists. Please choose another name")
                 main(False)
 
+            # PROJECT FOLDER CREATION
             project_folder = create_folder(projects_folder, project_name, True)
             structure_folder = create_folder(project_folder, "Original_Structures", True)
             fastas_folder = create_folder(project_folder, "Alignement", True)
@@ -115,6 +132,8 @@ def main(begin: bool):
 
         # EXECUTE ZIP CREATION
         elif user_input.split(" ")[0] == "zip":
+
+            # NAME VARIABLE CHECK
             try:
                 project_name: str = user_input.split(" ")[1]
             except IndexError:
@@ -122,6 +141,7 @@ def main(begin: bool):
                 print("You must specify the project name.")
                 main(False)
 
+            # CONFIG FILE CHECK
             try:
                 config_dict = load_config_file(project_name, projects_folder, config_file_name)
             except FileNotFoundError:
@@ -129,41 +149,51 @@ def main(begin: bool):
                 print("ERROR: Project files not found. Please check the project name and/or folder files.")
                 main(False)
 
+            # Fetching project folders path
             structure_folder = config_dict.get("structure_folder")
             processed_folder = config_dict.get("processed_folder")
             zip_folder = config_dict.get("zip_folder")
 
+            # Listing of all structures in the structure file
             list_of_structure_in_structure_file = load_structure_file(project_name, projects_folder)
             dict_of_structure = {}
+
+            # Checking for chain specification
             for structure in list_of_structure_in_structure_file:
                 if structure[-2] == "_":
                     dict_of_structure.update({structure[:-2]: structure[-1]})
                 else:
                     dict_of_structure.update({structure: "A"})
 
+            # Final list of structures to download, and download into structure folder
             list_of_structures_to_dl = [structure for structure in dict_of_structure.keys()]
-
             structure_left_behind = download_pdbs(list_of_structures_to_dl, structure_folder)
 
+            # Check for not downloadable structures, user prompt to add them into the structure folder
             for i in structure_left_behind:
-
                 if os.path.isfile(structure_folder + os.sep + f"{i}.pdb"):
                     pass
                 else:
                     print(f"The structure folder is lacking {i}.pdb, "
                           f"please add it in the folder {project_name}{os.sep}structure_folder")
 
+            # Check if all structures are present, else the user will be prompted again.
             if check_if_done(project_name, structure_folder, list_of_structures_to_dl):
                 pass
 
+            # Once all listed structures are present, all pdb files are copied into the processed folder
+            # This is the step where all needed modifications in the pdb are done
             for file in os.listdir(structure_folder):
                 mse_to_met(structure_folder, processed_folder, file, dict_of_structure.get(file[:-4]))
 
+            # Zip file creation
             create_zip(processed_folder, zip_folder, project_name, list_of_structures_to_dl)
             print("Zip file created. You can submit it to mTM-align server")
 
         # DOWNLOAD MSTA_results
         elif user_input.split(" ")[0] == "fetch":
+
+            # NAME VARIABLE CHECK
             try:
                 project_name: str = user_input.split(" ")[1]
             except IndexError:
@@ -171,6 +201,7 @@ def main(begin: bool):
                 print("You must specify the project name.")
                 main(False)
 
+            # URL VARIABLE CHECK
             try:
                 url_download: str = user_input.split(" ")[2]
             except IndexError:
@@ -178,6 +209,7 @@ def main(begin: bool):
                 print("You must specify the download url.")
                 main(False)
 
+            # CONFIG FILE CHECK
             try:
                 config_dict = load_config_file(project_name, projects_folder, config_file_name)
             except FileNotFoundError:
@@ -185,22 +217,28 @@ def main(begin: bool):
                 print("ERROR: Project files not found. Please check the project name and/or folder files.")
                 main(False)
 
+            # Fetching msta result folder
             msta_results_folder = config_dict.get("msta_results_folder")
 
+            # Warning message
             print("""    WARNING: for whatever reason, downloading results
-    can take several minutes. You might want to 
-    download them manually on your favorite
-    webbrowser. More details in the documentation.""")
+    can take several minutes. You might want to download 
+    them manually on your favorite webbrowser if it takes
+    too long. More details in the documentation.""")
             print()
             print("Downloading files... Please wait.")
+
+            # Downloading files from URL
             urllib.request.urlretrieve(url_download + "/new.pdb",
                                        msta_results_folder + os.sep + "structure_alignement.pdb")
             urllib.request.urlretrieve(url_download + "/seq.fasta",
                                        msta_results_folder + os.sep + "seq_alignement.fasta")
             print("Download completed.")
 
-        # EXECUTE MSTA ANALYSIS
+        # EXECUTE MSTA ANALYSIS, this is where the fun begins
         elif user_input.split(" ")[0] == "analysis":
+
+            # NAME VARIABLE CHECK
             try:
                 project_name: str = user_input.split(" ")[1]
             except IndexError:
@@ -208,6 +246,7 @@ def main(begin: bool):
                 print("You must specify the project name.")
                 main(False)
 
+            # PARAMETERS FILE CHECK
             try:
                 parameters_dict = load_config_file(project_name, projects_folder, parameters_file_name)
             except FileNotFoundError:
@@ -215,6 +254,7 @@ def main(begin: bool):
                 print("ERROR: Project files not found. Please check the project name and/or folder files.")
                 main(False)
 
+            # CONFIG FILE CHECK
             try:
                 config_dict = load_config_file(project_name, projects_folder, config_file_name)
             except FileNotFoundError:
@@ -222,6 +262,8 @@ def main(begin: bool):
                 print("ERROR: Project files not found. Please check the project name and/or folder files.")
                 main(False)
 
+            # BIG CHUNK OF VARIABLE TO FETCH IN THE CONFIG/PARAMETER FILES
+            # Config
             msta_results_folder = config_dict.get("msta_results_folder")
             processed_folder = config_dict.get("processed_folder")
             fasta_folder = config_dict.get("fasta_folder")
@@ -229,7 +271,7 @@ def main(begin: bool):
             pymol_script_folder = config_dict.get("pymol_script_folder")
             aligned_structures_folder = config_dict.get("aligned_structures_folder")
             pymol_path = config_dict.get("pymol_path").replace(r"\"", "/")
-
+            # Parameters
             time_multiplier = parameters_dict.get("time_multiplier")
             coloration_method = parameters_dict.get("coloration_method")
             coloration_cutoff = parameters_dict.get("coloration_cutoff")
@@ -248,6 +290,7 @@ def main(begin: bool):
             similar_aminoacids_representation = parameters_dict.get("similar_aminoacids_representation")
             ligand_representation = parameters_dict.get("ligand_representation")
 
+            # IF/ELSE Statements to check all parameters for the visualisation
             if default_coloration_backbone:
                 initial_color_backbone = "10, 10, 255"
                 final_color_backbone = "255, 10, 10"
@@ -271,11 +314,11 @@ def main(begin: bool):
                 print("ERROR: There are more than 2 files in the result folder. Please remove unnecessary ones.")
                 main(False)
 
+            # Check for results files in the correct format
             pdb_file_present = False
             seq_file_present = False
             name_fasta_file = ""
             name_pdb_file = ""
-
             for item in list_dir:
                 if item[-5:] == "fasta":
                     seq_file_present = True
@@ -289,10 +332,13 @@ def main(begin: bool):
                 print("ERROR: One of the result file is not in a compatible format. Please check result folder")
                 main(False)
 
+            # Assigning path to variables
             path_to_fasta = (msta_results_folder + os.sep + name_fasta_file)
             path_to_pdb = (msta_results_folder + os.sep + name_pdb_file)
+            # Reading fasta file for a list of structures
             pdb_list = get_list_from_ali(path_to_fasta)
 
+            # Simple check for the coloration method. RMSD cannot be used with less than 3 structures, sadly..
             if coloration_method == "RMSD" and len(pdb_list) < 3:
                 print()
                 print("WARNING. RMSD method cannot be used with less than 3 structures.\n"
@@ -305,6 +351,7 @@ def main(begin: bool):
             for pdb in pdb_list:
                 message_01 += pdb + " "
 
+            # First PyMOL script file creation for a discrete alignement
             with open(pymol_script_folder + os.sep + f"super{project_name}.pml", "w") as output:
                 print(f"""reinitialize
                         load {path_to_pdb}""", file=output)
@@ -317,6 +364,9 @@ def main(begin: bool):
             print(f"Waiting for {len(pdb_list) * 1.0 * float(time_multiplier)} "
                   f"seconds, time to superimpose all structures with PyMOL.")
 
+            # PyMOL execution of the script
+            # I didn't really find a way to start pymol without displaying its graphical interface, which is completely
+            # useless in this case. It will be frozen until completion of the pml file anyway.
             try:
                 subprocess.call([pymol_path, pymol_script_folder + os.sep + f"super{project_name}.pml"])
             except FileNotFoundError or PermissionError:
@@ -324,8 +374,12 @@ def main(begin: bool):
                       "Make sure you added the correct path in the configuration file.")
                 main(False)
 
+            # I couldn't find a better way to check if PyMOL has finished to process the files.
+            # This multiplier has been created to be modified by the user if their computer is not fast enough
             time.sleep(len(pdb_list) * 1.0 * float(time_multiplier))
 
+            # And this is the way to check if pymol has completed everything in time. If it didn't, the script
+            # will continue but as all structures aren't present yet, will prompt the user to increase the value
             aligned_files = [file[:4] for file in os.listdir(aligned_structures_folder)]
             if aligned_files != pdb_list:
                 print("ERROR. It seems that PyMOL didn't complete his alignement in time.\n"
@@ -334,18 +388,20 @@ def main(begin: bool):
             else:
                 print("Alignement complete!")
 
+            # Once everything is completed, every single atom coordinates are loaded in a dictionary for further
+            # calculations
             pdb_dict = dictionary_coordinates_pdb(pdb_list, aligned_structures_folder)
-
             for i in pdb_list:
-                print(f"Creation of {i}.fasta")
                 align_separate_sequences(path_to_fasta, i, fasta_folder)
             hm_fasta = how_many_pdb(fasta_folder)
             print("Dictionary of structures and coordinates generated correctly")
 
+            # Generation of a structure matrix that will be used to calculate alpha carbon atom distances later on
             matrix_pdb = matrix_pdbs(pdb_list)
             print("Matrices of structures generated correctly")
             align_len = read_lenght(pdb_list[0], fasta_folder)
 
+            # Creating the base of the pymol script used for visualisation in pymol
             with open(pymol_script_folder + os.sep + f"{project_name}.pml", "w") as f:
                 print("""reinitialize""", file=f)
                 for n in pdb_list:
@@ -354,11 +410,16 @@ def main(begin: bool):
                     select water, resn HOH
                     remove water""", file=f)
 
+            # Creation of the second pymol script used for amino-acid visualisation in pymol
             with open(pymol_script_folder + os.sep + f"{project_name}_aminoacids.pml", "w"):
                 pass
 
+            # Every single character in the fasta alignement is read. If one of those character is a dash, meaning one
+            # structure is not aligned at this position, this position will be ignored. If all characters at one
+            # position are amino-acids, the comparision and calculation are happening and will result in a special
+            # visualisation writen in the pymol scripts.
             print("Alignement reading and processing")
-            plus_grande_valeur = []
+            biggest_value = []
             for chara in range(align_len):
                 number = 0
                 aa_class = set()
@@ -373,6 +434,7 @@ def main(begin: bool):
 
                 if number >= hm_fasta:
                     dict_dist = {}
+                    # pair aminoacid distance calculation from the matrix
                     for tuplex in range(len(matrix_pdb)):
                         x = matrix_pdb[tuplex]
                         une, deux = x.split(",")
@@ -395,7 +457,7 @@ def main(begin: bool):
                         dict_dist.update(
                             {f"{a}, {seqres1}, {b}, {seqres2}": f"{position}, {distance(x1, y1, z1, x2, y2, z2)}"})
 
-                    plus_grande_valeur.append(max(dict_dist.values()))
+                    biggest_value.append(max(dict_dist.values()))
                     result, pos = 0, 0
 
                     if coloration_method == "HD":
@@ -440,6 +502,8 @@ def main(begin: bool):
                 else:
                     pass
 
+            # Once all visualisation commands are inside the script, we need to conclude with some utility commands
+            # Those are purely to help the user in the visualisation step for further modification within pymol
             with open(pymol_script_folder + os.sep + f"{project_name}.pml", "a") as f:
                 if aminoacids_representation:
                     print(f"""run {pymol_script_folder}{os.sep}{project_name}_aminoacids.pml""", file=f)
@@ -462,7 +526,6 @@ save {pymol_session}{os.sep}{project_name}.pse""", file=f)
 
             print()
             print("Opening PyMOL session")
-
             subprocess.call([pymol_path, pymol_script_folder + os.sep + f"{project_name}.pml"])
 
         # HELP COMMAND
@@ -474,8 +537,10 @@ save {pymol_session}{os.sep}{project_name}.pse""", file=f)
             print(f"Unknown command : {user_input}")
 
 
-# Auxilliary commands
+# Auxilliary commands for main()
 def get_help():
+    """print in the terminal all help for commands
+    note: there are certainly better ways to do that"""
     print("""Here is the list of commands:
     
 exit                                cancel the execution of the program
@@ -514,6 +579,7 @@ analysis <name>                     execute the alignement analysis
 
 
 def copy_config_parameters_from_template(project_name, template_name, projects_folder):
+    """will copy the config and parameters file from a project to another"""
     with codecs.open(projects_folder + os.sep + template_name + os.sep + config_file_name + ".txt",
                      "r", encoding='utf-8') as template_config:
         with codecs.open(projects_folder + os.sep + project_name + os.sep + config_file_name + ".txt",
@@ -530,8 +596,8 @@ def copy_config_parameters_from_template(project_name, template_name, projects_f
 
 
 def mse_to_met(location_folder, destination_folder, file, chain):
-    """change the selenomethionine in methionine for the pdb file
-    write new file into a destination folder"""
+    """change the selenomethionine in methionine for the pdb file write new file into a destination folder and will also
+     discriminate chain identifier other than the one specified"""
     with open(f"{location_folder}{os.sep}{file}", "r") as file_input:
         print(f"Processing {file}")
         with open(f"{destination_folder}{os.sep}{file}", "w") as file_output:
@@ -548,6 +614,7 @@ def mse_to_met(location_folder, destination_folder, file, chain):
 
 
 def load_config_file(project_name, projects_folder, file_name):
+    """load a config file using its name and its path within the projects folder"""
     configfile_dict = {}
     with codecs.open(projects_folder + os.sep + project_name + os.sep + f"{file_name}.txt",
                      encoding='utf-8') as config_file:
@@ -568,6 +635,7 @@ def load_config_file(project_name, projects_folder, file_name):
 
 
 def load_structure_file(project_name, projects_folder):
+    """read the structure list file in the project folder"""
     structure_list = []
     with codecs.open(projects_folder + os.sep + project_name + os.sep + f"structure_list.txt",
                      encoding='utf-8') as file:
@@ -577,21 +645,6 @@ def load_structure_file(project_name, projects_folder):
                 structure_list.append(line.strip())
 
     return structure_list
-
-
-def get_projects(path_to_projects_folder):
-    projects = []
-    for root, dirs, files in os.walk(path_to_projects_folder):
-        for file in files:
-            if file.endswith(f"{config_file_name}.txt"):
-                projects.append(file.replace(f"{config_file_name}.txt", ""))
-    if len(projects) == 0:
-        print("No project detected.")
-    else:
-        string = "These projects are available : "
-        for project in projects:
-            string += (project + " ")
-        print(string)
 
 
 def generate_structure_list(project_folder):
@@ -683,6 +736,7 @@ def exit_pg():
 
 
 def program_startup():
+    """message that is displayed at the startup of the program in the terminal"""
     print(f"""
 =======================================================================
 ============================= MPSA_VIEWER =============================
@@ -707,7 +761,10 @@ def create_zip(f_folder, destination, project_n, structure_list):
             zipf.write(f"{f_folder}{os.sep}{pdb}.pdb", os.path.basename(f"{f_folder}{os.sep}{pdb}.pdb"))
 
 
+# TODO: this kinda needs to be changed because if you stop the command,
+# TODO:  the program shouldn't exit yet
 def continue_or_not(question, exit_message):
+    """user prompt for a question, if NO is the input, the program stops"""
     userinp = input(f"{question} Y/N : ")
     if userinp.lower() == "y" or userinp.lower() == "yes":
         pass
@@ -823,6 +880,7 @@ def delete_files_in_folder(folder):
 
 
 def color_madness(color_initial, color_final, how_many_variantes, cutoff):
+    """creates a color gradient dictionary associated with values to be used"""
     initial_red, initial_green, initial_blue = str(color_initial).split(",")
     final_red, final_green, final_blue = str(color_final).split(",")
     red_dif, green_dif, blue_dif = float(initial_red) - float(final_red), float(initial_green) - float(
@@ -875,18 +933,6 @@ def rmsd_list(list_val):
     return the_result
 
 
-def dummy(something):
-    return something
-
-
-def special_for_this(pdb, position, pdb_dictionnary, fasta_folder):
-    seq = fetch_sequence_in_fasta(pdb, fasta_folder)
-    dash = count_dash(seq, 0, position)
-    true_pos = position - dash
-    x, y, z, seqres = xyzseq_pdb(pdb_dictionnary, pdb, true_pos)
-    return seqres
-
-
 def print_in_script_aminoacids(pdb, position, color, file, pdb_dictionnary, fasta_folder, representation):
     seq = fetch_sequence_in_fasta(pdb, fasta_folder)
     dash = count_dash(seq, 0, position)
@@ -904,30 +950,6 @@ def print_in_script(pdb, position, color, file, pdb_dictionnary, fasta_folder):
     x, y, z, seqres = xyzseq_pdb(pdb_dictionnary, pdb, true_pos)
     i = pdb.replace(".pdb", "")
     print(f"""color {color}, {i} and resi {seqres} and (name c+o+n+ca)""", file=file)
-
-
-def which_class(nature):
-    aa_1 = ["A", "G"]  # nonpolar_small
-    aa_2 = ["V", "L", "I", "M", "P"]  # nonpolar_medium
-    aa_3 = ["F", "W", "Y"]  # aromatic
-    aa_4 = ["S", "T", "C", "N", "Q"]  # polar
-    aa_5 = ["K", "R", "H"]  # plus
-    aa_6 = ["D", "E"]  # minus
-
-    if nature in aa_1:
-        return 1
-    if nature in aa_2:
-        return 2
-    if nature in aa_3:
-        return 3
-    if nature in aa_4:
-        return 4
-    if nature in aa_5:
-        return 5
-    if nature in aa_6:
-        return 6
-    else:
-        return 0
 
 
 def xyzseq_pdb(dic, pdb, number):
@@ -948,15 +970,6 @@ def fetch_sequence_in_fasta(file, fasta_folder):
         for line in f:
             if line[:1].strip() != ">":
                 return line.strip()
-
-
-def is_aa(sequence, position):
-    aminoacids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
-                  'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
-    if sequence[position].strip() in aminoacids:
-        return True
-    else:
-        return False
 
 
 def check_pos_ifchar(number, file, fasta_folder):
@@ -1079,19 +1092,6 @@ def get_list_from_ali(file):
                 pdb_liste.append(line[1:].strip().replace(".pdb", ""))
 
     return pdb_liste
-
-
-def create_folder_destructive(path_dir, folder):
-    """create a named folder in a given path, if it allready exists, delete its files"""
-    directory = path_dir + os.sep + f"{folder}"
-    try:
-        os.mkdir(directory)
-    except OSError:
-        print(f"'{folder}' folder exists already. Erasing its content.")
-        delete_files_in_folder(directory)
-    else:
-        print(f"'{folder}' folder created sucessfully")
-    return directory
 
 
 if __name__ == '__main__':

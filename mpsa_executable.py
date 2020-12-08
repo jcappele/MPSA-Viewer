@@ -36,6 +36,8 @@ import urllib.request
 import urllib.error
 import shutil
 import codecs
+import traceback
+from datetime import datetime, date
 
 # Variables
 version = "alpha 0.41"
@@ -43,12 +45,19 @@ config_file_name = "configuration_file"
 parameters_file_name = "parameters"
 structure_file_name = "structure_list"
 
+today = date.today()
+now = datetime.now()
+current_date = today.strftime("%d-%b-%Y")
+current_time = now.strftime("%H.%M.%S")
+
 
 # Main function
 def main(begin: bool):
     """main function, will be used to check user input and execute commands.
     if the argument is False, just like stated below, the program startup
     message will not be printed in the terminal"""
+
+    sys.stdout = Logger()
 
     if begin:
         program_startup()
@@ -69,6 +78,10 @@ def main(begin: bool):
         # EXIT... again!
         elif user_input == "exit":
             exit(0)
+
+        # DEBUG ERROR
+        elif user_input == "error":
+            raise ValueError
 
         # NEW PROJECT
         elif user_input.split(" ")[0] == "new_project":
@@ -222,9 +235,9 @@ def main(begin: bool):
 
             # Warning message
             print("""    WARNING: for whatever reason, downloading results
-    can take several minutes. You might want to download 
-    them manually on your favorite webbrowser if it takes
-    too long. More details in the documentation.""")
+        can take several minutes. You might want to download 
+        them manually on your favorite webbrowser if it takes
+        too long. More details in the documentation.""")
             print()
             print("Downloading files... Please wait.")
 
@@ -354,10 +367,10 @@ def main(begin: bool):
             # First PyMOL script file creation for a discrete alignement
             with open(pymol_script_folder + os.sep + f"super{project_name}.pml", "w") as output:
                 print(f"""reinitialize
-                        load {path_to_pdb}""", file=output)
+                            load {path_to_pdb}""", file=output)
                 for x in pdb_list:
                     print(f"""load {processed_folder}{os.sep}{x}.pdb
-                    super {x}, {name_pdb_file.replace(".pdb", "")}""", file=output)
+                        super {x}, {name_pdb_file.replace(".pdb", "")}""", file=output)
                 for x in pdb_list:
                     print(f"""save {aligned_structures_folder}{os.sep}{x}.pdb, {x}""", file=output)
                 print("""quit""", file=output)
@@ -407,8 +420,8 @@ def main(begin: bool):
                 for n in pdb_list:
                     print(f"""load {aligned_structures_folder}{os.sep}{n}.pdb""", file=f)
                 print(f"""color {not_aligned_backbone}, all
-                    select water, resn HOH
-                    remove water""", file=f)
+                        select water, resn HOH
+                        remove water""", file=f)
 
             # Creation of the second pymol script used for amino-acid visualisation in pymol
             with open(pymol_script_folder + os.sep + f"{project_name}_aminoacids.pml", "w"):
@@ -508,21 +521,21 @@ def main(begin: bool):
                 if aminoacids_representation:
                     print(f"""run {pymol_script_folder}{os.sep}{project_name}_aminoacids.pml""", file=f)
                 print(f"""set cartoon_flat_sheets, 1
-set cartoon_side_chain_helper, 1
-set cartoon_fancy_helices, 1
-select Identical_Residues, color {identical_aminoacids_color}
-hide (Identical_Residues)
-show {identical_aminoacids_representation}, Identical_Residues
-select SameClass_Residues, color {similar_aminoacids_color}
-hide (SameClass_Residues)
-show {similar_aminoacids_representation}, SameClass_Residues
-hide (hetatm)
-show {ligand_representation}, hetatm
-orient all
-bg_color {background_color}
-util.cnc
-deselect
-save {pymol_session}{os.sep}{project_name}.pse""", file=f)
+    set cartoon_side_chain_helper, 1
+    set cartoon_fancy_helices, 1
+    select Identical_Residues, color {identical_aminoacids_color}
+    hide (Identical_Residues)
+    show {identical_aminoacids_representation}, Identical_Residues
+    select SameClass_Residues, color {similar_aminoacids_color}
+    hide (SameClass_Residues)
+    show {similar_aminoacids_representation}, SameClass_Residues
+    hide (hetatm)
+    show {ligand_representation}, hetatm
+    orient all
+    bg_color {background_color}
+    util.cnc
+    deselect
+    save {pymol_session}{os.sep}{project_name}.pse""", file=f)
 
             print()
             print("Opening PyMOL session")
@@ -538,6 +551,20 @@ save {pymol_session}{os.sep}{project_name}.pse""", file=f)
 
 
 # Auxilliary commands for main()
+
+class Logger(object):
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.log = open(logs_folder + os.sep + f"log_{current_date}-{current_time}.txt", "w")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        pass
+
+
 def get_help():
     """print in the terminal all help for commands
     note: there are certainly better ways to do that"""
@@ -761,8 +788,6 @@ def create_zip(f_folder, destination, project_n, structure_list):
             zipf.write(f"{f_folder}{os.sep}{pdb}.pdb", os.path.basename(f"{f_folder}{os.sep}{pdb}.pdb"))
 
 
-# TODO: this kinda needs to be changed because if you stop the command,
-# TODO:  the program shouldn't exit yet
 def continue_or_not(question, exit_message):
     """user prompt for a question, if NO is the input, the program stops"""
     userinp = input(f"{question} Y/N : ")
@@ -1095,4 +1120,15 @@ def get_list_from_ali(file):
 
 
 if __name__ == '__main__':
-    main(True)
+    logs_folder = create_folder(os.getcwd(), "MPSA_Logs", False)
+    try:
+        main(True)
+    except Exception as e:
+        timedate = f"{current_date}-{current_time}"
+        print(f"The program has encountered an error, logging in ERROR-{timedate}.txt")
+        print("Contact the developers if you need help. "
+              "Exiting in 5 secs")
+        time.sleep(5)
+        desired_trace = traceback.format_exc()
+        with open(logs_folder + os.sep + f"ERROR-{timedate}.txt", "w") as error_log:
+            print(desired_trace, file=error_log)
